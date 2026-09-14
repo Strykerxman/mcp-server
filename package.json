@@ -1,0 +1,22 @@
+{
+  "name": "003_secure_dev_mcp",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "tsx test/smoke.test.ts",
+    "dev": "tsx src/server.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "devDependencies": {
+    "@modelcontextprotocol/inspector": "^2.6.0",
+    "tsx": "^4.23.13"
+  },
+  "dependencies": {
+    "openai": "^7.15.0"
+  }
+}
