@@ -3,7 +3,7 @@ import type { Rule } from "./rules.ts"
 import { specificity } from "./rules.ts"
 
 export function evaluate(toolRequest: ToolRequest, rules: Rule[]): Decision {
-    const matching: Rule[] = rules.filter(rule => matches(rule, toolRequest))
+    const matching: Rule[] = rules.filter(rule => matches(toolRequest, rule))
 
     if (matching.length === 0) return "DENY"
     if (matching.some(rule => rule.hardDeny && rule.decision == "DENY")) return "DENY"
@@ -17,7 +17,7 @@ export function evaluate(toolRequest: ToolRequest, rules: Rule[]): Decision {
     return "ALLOW"
 }
 
-export function matches(rule: Rule, toolRequest: ToolRequest): boolean {
+export function matches(toolRequest: ToolRequest, rule: Rule): boolean {
     if (rule.tool !== undefined && toolRequest.tool !== rule.tool )
         return false
 

@@ -27,29 +27,31 @@ export const rules: Rule[] = [
         environment: "local",
         decision: "ALLOW"
     },
-
     {
         tool: "read_file",
         resource: ".env",
         decision: "DENY"
     },
-
     {
         tool: "run_tests",
         environment: "local",
-        decision: "DENY"
+        decision: "ALLOW"
     },
-
     {
         environment: "production",
         operation: "write",
         decision: "REQUIRE_APPROVAL"
     },
-
     {
         environment: "production",
         operation: "delete",
         decision: "DENY",
         hardDeny: true
+    },
+    {
+        tool: "run_tests",
+        environment: "production",
+        operation: "execute",
+        decision: "REQUIRE_APPROVAL"
     }
 ]

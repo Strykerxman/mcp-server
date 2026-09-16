@@ -1,4 +1,4 @@
-import { ToolRequest } from "./types.ts";
+import type { ToolRequest } from "./types.ts";
 import { rules } from "./rules.ts"
 import { evaluate } from "./evaluate.ts";
 

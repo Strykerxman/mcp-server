@@ -41,12 +41,3 @@ export interface ModelTool {
     parameters: Record<string, unknown>
     strict: boolean
 }
-
-export interface Rule {
-    tool?: Tool
-    environment?: Environment
-    operation?: Operation
-    resource?: string
-    decision: Decision
-    hardDeny?: boolean
-}
