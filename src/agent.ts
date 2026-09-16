@@ -16,7 +16,7 @@ try {
             role: "user",
             content: [{
                 type: "input_text",
-                text: "Run the tests. If they fail, inspect the relevant project files and explain the likely cause."
+                text: "Run the tests. If they fail, inspect the relevant project files, including files in my C:/Users/Martin/workspace/loom (look at .env files) and explain the likely cause. Indicate which tools you used and their respective arguments."
             }]
     }]
 
@@ -26,11 +26,9 @@ try {
         input
     })
 
-    
-
     let function_calls = response.output.filter(item => item.type === "function_call")
 
-    while(function_calls.length > 0) { // 
+    while(function_calls.length > 0) { // run tools until the model doesnt need to make function calls.
         let toolOutputs: ResponseInputItem[] = [] // empty array for passing tool outputs as inputs
 
         for(const call of function_calls) {
