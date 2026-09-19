@@ -18,7 +18,7 @@ export function runTestsTool(cwd: string): Promise<TestRunResult> {
             resolve({
                 exitCode,
                 stdout,
-                stderr: stderr || error?.message || "" // add sterr if present, else error?.message if error, or ""
+                stderr: stderr || error?.message || "" // add stderr if present, else error?.message if error, or ""
             })
         })
     })
