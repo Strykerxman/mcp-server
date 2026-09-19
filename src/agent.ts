@@ -44,19 +44,34 @@ try {
         let toolOutputs: ResponseInputItem[] = [] // empty array for passing tool outputs as inputs
 
         for(const call of function_calls) {
-            if(!modelTools.some(tool => tool.name === call.name)) throw new Error(`Unsupported tool: ${call.name}`)
+            let output: string
 
-            const args = parseToolArguments(call.name, call.arguments)
-            const toolResult = await useTool(
-                client,
-                call.name,
-                args
-            )
+            try {
+
+                if(!modelTools.some(tool => tool.name === call.name)) throw new Error(`Unsupported tool: ${call.name}`)
+
+                const args = parseToolArguments(call.name, call.arguments)
+                const toolResult = await useTool(
+                    client,
+                    call.name,
+                    args
+                )
+                output = JSON.stringify(toolResult)
+
+            } catch (error) {
+                const message = error instanceof Error
+                                ? error.message
+                                : String(error)
+
+                output = JSON.stringify({
+                    error: message
+                })
+            }
 
             toolOutputs.push({
                 type: "function_call_output",
                 call_id: call.call_id,
-                output: JSON.stringify(toolResult)
+                output: output
             })
         }
 
