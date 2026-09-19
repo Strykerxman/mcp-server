@@ -1,14 +1,15 @@
 import type { Tool, Environment, Operation, Decision } from "./types.ts"
 
-export interface Rule {
-    tool?: Tool,
-    environment?: Environment,
-    operation?: Operation,
-    resource?: string,
+export const BLOCKED_FILES = [".env", ".env.local", ".env.docker", ".env.dev", ".env.development", ".env.prod", ".env.production"]
 
-    decision: Decision,
-    hardDeny?: boolean
-}
+const blockedResourceRules: Rule[] = BLOCKED_FILES.map(file => {
+    return {
+        tool: "read_file",
+        resource: file,
+        decision: "DENY"
+    }
+})
+
 
 export function specificity(rule: Rule): number {
     let score = 0
@@ -21,16 +22,22 @@ export function specificity(rule: Rule): number {
     return score;
 }
 
+export interface Rule {
+    tool?: Tool,
+    environment?: Environment,
+    operation?: Operation,
+    resource?: string,
+
+    decision: Decision,
+    hardDeny?: boolean
+}
+
 export const rules: Rule[] = [
+    ...blockedResourceRules,
     {
         tool: "read_file",
         environment: "local",
         decision: "ALLOW"
-    },
-    {
-        tool: "read_file",
-        resource: ".env",
-        decision: "DENY"
     },
     {
         tool: "run_tests",
