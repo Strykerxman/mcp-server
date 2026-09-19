@@ -22,30 +22,10 @@ The server exposes only:
 
 | Tool | Input | Current behavior |
 | --- | --- | --- |
-| `run_tests` | none | Runs the fixed command `npm test` in the server's startup working directory. |
+| `run_tests` | none | Runs the fixed command `npm test` in the project directory derived from `src/server.ts`, then returns its exit code, stdout, and stderr. |
 | `read_file` | `{ "path": string }` | Reads a UTF-8 file after policy and file-confinement checks. |
 
 ## Architecture
-
-```mermaid
-flowchart LR
-    U[User prompt] --> A[agent.ts]
-    A --> O[OpenAI Responses API]
-    O -->|function call| A
-    A --> C[client.ts]
-    C <-->|MCP over stdio| S[server.ts]
-    S --> Z[authorize.ts]
-    Z --> E[evaluate.ts + rules.ts]
-    E -->|ALLOW| S
-    E -->|DENY / REQUIRE_APPROVAL| X[Error response]
-    S --> R[toolRegistry.ts]
-    R --> T[readFile.ts / runTests.ts]
-    T -->|tool result| S
-    S --> C
-    C --> A
-    A -->|tool output| O
-    O --> F[Final response]
-```
 
 The central server pipeline is:
 
@@ -57,7 +37,7 @@ MCP request -> validate arguments -> authorize -> dispatch -> execute -> MCP res
 
 | Part | Responsibility | Explicitly does not do |
 | --- | --- | --- |
-| `src/agent.ts` | Gives the model the available tools, forwards requested calls through the MCP client, returns tool outputs to the model, and prints the final answer. | It does not import or execute local tool implementations and does not make policy decisions. |
+| `src/agent.ts` | Gives the model the available tools, validates requested calls, forwards valid calls through the MCP client, returns tool results or call errors to the model, and prints the final answer. | It does not import or execute local tool implementations and does not make policy decisions. |
 | `src/client.ts` | Starts the server process, connects over stdio, lists tools, converts their schemas to OpenAI function definitions, calls tools, and closes the connection. | It does not decide when a tool should be used or whether a call is authorized. |
 | `src/server.ts` | Registers MCP tools, constructs typed authorization requests, enforces authorization, and dispatches allowed calls. | It does not choose tools or generate an AI response. |
 | `src/policy/*` | Represents requests and rules, evaluates matching rules, and turns non-allow decisions into errors. | It does not authenticate callers, validate registry membership, or execute tools. |
@@ -72,14 +52,15 @@ This separation is the main lesson of the project: the model may **request** a c
 2. `client.ts` starts `src/server.ts` with a stdio transport.
 3. The client asks the server for its MCP tool definitions.
 4. The agent presents those definitions to the OpenAI Responses API.
-5. When the model emits a function call, the agent checks that the advertised tool name exists and sends the call through MCP.
-6. The server creates a `ToolRequest` and calls `authorize`.
-7. `evaluate` compares that request with the policy rules.
-8. Only an `ALLOW` decision reaches the registry and local implementation.
-9. The MCP result is returned to the model as a `function_call_output`.
-10. The loop continues until the model returns no further function calls, then the final text is printed.
+5. When the model emits a function call, the agent checks that the advertised tool name exists and parses its arguments as a JSON object.
+6. Valid calls are sent through MCP; call-processing errors are instead converted into `function_call_output` messages so the model can correct and retry them.
+7. For an MCP call, the server creates a `ToolRequest` and calls `authorize`.
+8. `authorize` matches that request against the rules and resolves the policy decision.
+9. Only an `ALLOW` decision reaches the registry and local implementation.
+10. The MCP result is returned to the model as a `function_call_output`.
+11. The loop continues until the model returns no further function calls, then the final text is printed. Attempting a sixth tool-call round terminates the demo with an error.
 
-The prompt currently hardcoded in `agent.ts` is an adversarial learning scenario: it asks the model to run tests and then attempts to direct file inspection outside the workspace and toward environment files. It is intended to exercise server-side controls rather than to represent normal application input.
+The prompt currently hardcoded in `agent.ts` is a portable project-inspection demonstration: it asks the model to run the tests, read `package.json`, summarize the result and available scripts, and report its tool calls. Malformed or non-object arguments become error outputs rather than terminating the whole loop, allowing the model to retry within the round limit.
 
 ## Policy model
 
@@ -98,7 +79,7 @@ Evaluation follows these rules:
 
 Specificity is the number of constrained fields on a rule. This makes a narrow rule override a broad one without relying on array order.
 
-The current policy allows local file reads and local test execution, denies the exact `.env` resource, and includes production examples for approval and hard denial. The write/delete production examples are not reachable through the current `ToolRequest` union because no write or delete tool exists; they demonstrate policy vocabulary rather than an exposed capability.
+The current policy allows local file reads and local test execution. `rules.ts` also defines the blocked environment-file basenames and generates a deny rule for each one. Both authorization and `readFileTool` normalize requested basenames to lowercase and use this shared list. The policy also includes production examples for approval and hard denial. The write/delete production examples are not reachable through the current `ToolRequest` union because no write or delete tool exists; they demonstrate policy vocabulary rather than an exposed capability.
 
 `REQUIRE_APPROVAL` is also only a decision value in this project. There is no interactive approval workflow: `authorize` turns that decision into an error, so the operation does not run.
 
@@ -112,20 +93,20 @@ The current policy allows local file reads and local test execution, denies the 
 │   ├── client.ts               # MCP client and OpenAI tool adaptation
 │   ├── server.ts               # MCP server and authorization boundary
 │   ├── policy/
-│   │   ├── authorize.ts        # Enforces the evaluator's decision
-│   │   ├── confinement.ts      # Workspace root and blocked basenames
-│   │   ├── evaluate.ts         # Matching and precedence algorithm
-│   │   ├── rules.ts            # Declarative policy rules
+│   │   ├── authorize.ts        # Matches rules, resolves decisions, and enforces them
+│   │   ├── rules.ts            # Declarative rules and blocked basenames
 │   │   └── types.ts            # Request, decision, and model-tool types
 │   └── tools/
 │       ├── readFile.ts          # UTF-8 file reader with local checks
 │       ├── runTests.ts          # Fixed npm test command
 │       └── toolRegistry.ts      # Name-to-implementation map
 ├── test/
+│   ├── fixtures/
+│   │   └── failing-tests/      # Deliberately failing npm test fixture
 │   ├── authorize.test.ts
 │   ├── mcpIntegration.test.ts
-│   ├── policy.test.ts
-│   └── readFile.test.ts
+│   ├── readFile.test.ts
+│   └── runTests.test.ts
 ├── package.json
 ├── package-lock.json
 └── tsconfig.json
@@ -134,9 +115,6 @@ The current policy allows local file reads and local test execution, denies the 
 ## Requirements and commands
 
 The installed OpenAI SDK requires Node.js 22 or newer. The MCP v2 packages require Node.js 20 or newer, so **Node.js 22+** is the effective project requirement.
-
-> [!NOTE]
-> The current dependency metadata still has the reproducibility gap described in [Packaging note](#packaging-note). Correct that before treating these as clean-checkout instructions.
 
 ```bash
 npm install
@@ -175,7 +153,8 @@ The test suite currently checks:
 - policy decisions for representative requests;
 - reading a file inside the workspace;
 - blocking selected environment-file basenames;
-- rejecting a basic `..` traversal attempt; and
+- rejecting basic traversal and similarly named sibling-workspace paths;
+- preserving the exit code, stdout, and stderr from a deliberately failing test command; and
 - successful and denied `read_file` calls across a real MCP stdio connection.
 
 Run it with `npm test`. Type-check source and tests with `npm run typecheck`.
@@ -189,20 +168,20 @@ The project deliberately keeps its threat model small:
 - The server is a local child process using stdio. It has no remote transport, caller authentication, user isolation, or network authorization layer.
 - Tools run with the same operating-system permissions as the Node.js process.
 - `run_tests` executes project-controlled package scripts. Although its command is fixed, those scripts are code execution and should only be run in a trusted workspace.
-- Workspace confinement currently compares resolved path strings with `startsWith`. That is not a safe directory-boundary test: a sibling path whose name begins with the workspace path can pass. A relative-path containment check is needed.
-- Resolving a path lexically does not prevent an in-workspace symbolic link from pointing outside the workspace. Strong confinement must account for real paths and link behavior.
-- The policy denies only the exact resource string `.env`, while the tool implementation blocks a separate hardcoded basename list. Inputs such as `./.env` therefore receive different answers from the two layers even though execution is currently blocked by the tool.
+- Workspace confinement resolves the target and accepts only the workspace root or paths beginning with the root plus a platform path separator. This prevents lexical `..` traversal and similarly named sibling-directory escapes.
+- This lexical check does not prevent an in-workspace symbolic link from pointing outside the workspace. Symbolic-link confinement is intentionally not implemented in this learning project.
+- Policy authorization and `readFileTool` share the blocked basename list from `rules.ts`; the tool repeats the check as a capability-specific safeguard.
 - A blocklist of environment filenames is not a general secret-detection mechanism. Other credentials, configuration files, and unlisted dotenv variants remain readable.
 - `REQUIRE_APPROVAL` does not obtain human approval; it rejects the call.
-- The agent trusts function-call arguments to be valid JSON and has no explicit maximum number of tool rounds.
+- The agent returns per-call validation and invocation errors to the model so it may retry, but the agent itself does not repair arguments and stops after five tool-call rounds.
 
 These limitations are reasons to describe the repository as a learning model, not as a hardened sandbox.
 
 ## Packaging note
 
-The source directly imports the MCP client, MCP server, OpenAI SDK, and Zod. The scripts and compiler configuration also depend on `tsx`, TypeScript, and the Node.js type declarations. For a clean checkout to be reproducible, every directly imported package and every command-line development tool must be declared in this project's own `package.json`; relying on transitive, global, or parent-directory installations can make local checks pass accidentally.
+The runtime dependencies—MCP client, MCP server, OpenAI SDK, and Zod—are declared directly in `package.json`. The development dependencies—`tsx`, TypeScript, and the Node.js type declarations—are declared separately. This avoids relying on transitive, global, or parent-directory installations.
 
-After dependency metadata is corrected, regenerate `package-lock.json` with npm rather than editing the lockfile manually, then verify from a clean install with `npm ci`, `npm test`, and `npm run typecheck`.
+`package-lock.json` is generated by npm and records the reproducible dependency tree. To verify a clean installation, use `npm ci`, followed by `npm test` and `npm run typecheck`.
 
 ## Further reading
 
