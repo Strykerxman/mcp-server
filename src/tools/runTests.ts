@@ -1,17 +1,25 @@
 import { exec } from "node:child_process";
-import { promisify } from "node:util";
 
-const execPromise = promisify(exec);
+export interface TestRunResult {
+    exitCode: number,
+    stdout: string,
+    stderr: string
+}
 
-export async function runTestsTool(cwd: string): Promise<string> { 
-    const { stdout, stderr } = await execPromise(
-        "npm test",
-        { cwd }
-    );
+export function runTestsTool(cwd: string): Promise<TestRunResult> {
+    return new Promise(resolve => {
+        exec("npm test", { cwd }, (error, stdout, stderr) => {
+            let exitCode = 0
 
-    if (stderr) {
-        console.error(stderr);
-    }
+            if (error) {
+                exitCode = typeof error.code === "number" ? error.code : 1
+            }
 
-    return stdout;
+            resolve({
+                exitCode,
+                stdout,
+                stderr: stderr || error?.message || "" // add sterr if present, else error?.message if error, or ""
+            })
+        })
+    })
 }

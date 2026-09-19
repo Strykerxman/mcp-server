@@ -1,12 +1,14 @@
 import { Client } from "@modelcontextprotocol/client"
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio"
+import { fileURLToPath } from "url"
+import * as path from "path"
 
 import type { ModelTool } from "./policy/types.ts"
 
 export async function connect(): Promise<Client> {
     const transport = new StdioClientTransport({
         command: "tsx",
-        args: ["src/server.ts"]
+        args: [getServerPath()]
     })
 
     const client = new Client({
@@ -52,4 +54,12 @@ export async function closeMcp(
     client: Client
 ): Promise<void> {
     await client.close()
+}
+
+function getServerPath() {
+    const currFileURL = import.meta.url
+    const currFilePath = fileURLToPath(currFileURL)
+    let currDir = path.dirname(currFilePath)
+
+    return path.resolve(currDir, "server.ts")
 }

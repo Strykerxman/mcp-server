@@ -2,7 +2,7 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import { closeMcp, connect, useTool } from "../src/client.ts"
 
-test("MCP read_file returns package.json", async () => {
+test("[MCP] read_file returns package.json", async () => {
     const client = await connect()
 
     try {
@@ -25,7 +25,7 @@ test("MCP read_file returns package.json", async () => {
     }
 })
 
-test("MCP read_file denies .env read", async () => {
+test("[MCP] read_file cannot read .env", async () => {
     const client = await connect()
 
     try {

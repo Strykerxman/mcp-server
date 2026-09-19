@@ -1,11 +1,12 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4"
-import { toolRegistry } from "./tools/toolRegistry.ts"
+import * as path from "path"
 import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
+import { fileURLToPath } from "url"
+
+import { toolRegistry } from "./tools/toolRegistry.ts"
 import type { ToolRequest } from "./policy/types.ts";
 import { authorize } from "./policy/authorize.ts";
-
-const WORKSPACE_ROOT = process.cwd()
 
 export const server = new McpServer({
     name: "secure-dev-tools-mcp-server",
@@ -27,8 +28,18 @@ server.registerTool(
 
         authorize(request) // returns silently when allowed, throws if denied or approval is required
 
-        const testOutputs = await toolRegistry.run_tests(WORKSPACE_ROOT) // hardcoded workspace path where the server is running
-        return { content: [{type: 'text', text: testOutputs}]}
+        const result = await toolRegistry.run_tests(getWorkspacePath())
+        const output = [
+            `Exit code: ${result.exitCode}`,
+            "",
+            "STDOUT:",
+            result.stdout || "(empty)",
+            "",
+            "STDERR:",
+            result.stderr || "(empty)"
+        ].join("\n")
+
+        return { content: [{ type: 'text', text: output }] }
     }
 )
 
@@ -50,10 +61,18 @@ server.registerTool(
 
         authorize(request)
         
-        const fileContents = await toolRegistry.read_file(path)
+        const fileContents = await toolRegistry.read_file(getWorkspacePath(), path)
         return { content: [{type: 'text', text: fileContents}]}
     }
 )
+
+function getWorkspacePath() {
+    const currFileURL = import.meta.url
+    const currFilePath = fileURLToPath(currFileURL)
+    let currDir = path.dirname(currFilePath) // src
+
+    return path.resolve(currDir, "..") // project root
+}
 
 async function main() {
     const transport = new StdioServerTransport();
@@ -63,4 +82,4 @@ async function main() {
 main().catch(error => {
     console.error("Server failed:", error);
     process.exit(1);
-});
+})
