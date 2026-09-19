@@ -1,23 +1,29 @@
 {
   "name": "003_secure_dev_mcp",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Simple development example for Model Context Protocol (MCP) with OpenAI API integration & simple, custom tools.",
+  "private": true,
   "scripts": {
     "test": "tsx --test \"test/**/*.test.ts\"",
     "dev": "tsx src/server.ts",
     "typecheck": "tsc --noEmit"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": ["MCP", "Model Context Protocol", "OpenAI", "TypeScript", "Node.js"],
+  "author": "Strykerxman",
   "license": "ISC",
   "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "devDependencies": {
-    "tsx": "^4.23.13"
+    "@types/node": "^22.20.3",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2"
   },
   "dependencies": {
     "@modelcontextprotocol/client": "^2.0.0",
     "@modelcontextprotocol/server": "^2.0.0",
-    "openai": "^7.15.0"
+    "openai": "^7.15.0",
+    "zod": "^4.6.5"
   }
 }
